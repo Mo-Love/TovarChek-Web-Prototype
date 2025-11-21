@@ -1,66 +1,37 @@
 // functions/proxy.js
+
 const { google } = require('googleapis');
-const axios = require('axios'); // Залишаємо на майбутнє для UPCitemdb
+// ... інші константи SPREADSHEET_ID, SHEET_NAME залишаються
 
-// 🔴 ЗМІНІТЬ: ВАШ API KEY та ID ТАБЛИЦІ
-const GOOGLE_API_KEY = "AIzaSyA2u_gbftd6bbeuuGg_nSHijrmNHLrQPBw"; 
-const SPREADSHEET_ID = "1D2gBISWa4dpYA-BHEtzS0lAlVhQjt9I0HXDmNHQPqQY"; 
-const SHEET_NAME = 'ТоварЧек'; // Перевірте назву листа
+// --- АВТЕНТИФІКАЦІЯ ---
+// Отримуємо JSON-клю зі змінної середовища Netlify
+const SERVICE_ACCOUNT_KEY = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY); 
 
-// Ініціалізація Sheets API з API Key
-const sheets = google.sheets({
-    version: 'v4', 
-    auth: GOOGLE_API_KEY 
+const auth = new google.auth.GoogleAuth({
+    credentials: {
+        client_email: SERVICE_ACCOUNT_KEY.client_email,
+        private_key: SERVICE_ACCOUNT_KEY.private_key.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
+// Ініціалізація Sheets API з Service Account
+const sheets = google.sheets({ version: 'v4', auth });
+
 exports.handler = async (event) => {
-    if (event.httpMethod !== 'GET') {
-        return { statusCode: 405, body: "Method Not Allowed" };
-    }
-
+    // ... вся логіка залишається та сама ...
+    
     try {
-        const queryParams = event.queryStringParameters;
-        
-        // Перевірка, чи є ім'я, перш ніж записувати
-        if (!queryParams.name) {
-             return { statusCode: 400, body: JSON.stringify({ status: 'error', message: 'Name parameter is missing' })};
-        }
+        // ... (код отримання параметрів) ...
 
-        // 1. Форматуємо дані для запису у рядок
-        const rowData = [
-            new Date().toISOString(),
-            queryParams.name,
-            queryParams.description || '',
-            queryParams.category || '',
-            queryParams.price || ''
-        ];
-        
         // 2. Викликаємо Sheets API (метод append)
         const response = await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:E`, // Діапазон запису A:E
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-                values: [rowData], // Записуємо один рядок даних
-            },
+            // ... (параметри запису) ...
         });
         
-        // Успішна відповідь
-        return {
-            statusCode: 200,
-            headers: {
-                "Access-Control-Allow-Origin": "*", 
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ status: 'success', message: 'Data logged via Sheets API', updates: response.data.updates })
-        };
+        // ... (успішне повернення) ...
 
     } catch (error) {
-        // Помилки Sheets API будуть тут
-        console.error("SHEETS API ERROR:", error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ status: 'error', message: 'Sheets API call failed', details: error.message })
-        };
+        // ... (обробка помилок) ...
     }
 };
