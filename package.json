@@ -1,1 +1,8 @@
-
+{
+  "name": "tovarchek-web-prototype",
+  "version": "1.0.0",
+  "description": "Web prototype for TovarChek app.",
+  "scripts": {
+    "build": "echo 'No build step required for static HTML'"
+  }
+}
