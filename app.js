@@ -1,7 +1,7 @@
 // app.js
 
 // 🔴 ВСТАВТЕ СЮДИ ВАШ УНІКАЛЬНИЙ GOOGLE APPS SCRIPT URL!
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQHtOE6l7POsA780OQbU9DQqJlh3BA5H8G-MDY09bV9WeTxVK05g3-2RVQ8wp5na1Z/exec"; 
+const PROXY_URL = "/.netlify/functions/proxy";
 const statusDiv = document.getElementById('status');
 const loadingDiv = document.getElementById('loading');
 const userInput = document.getElementById('userInput');
@@ -43,7 +43,7 @@ async function sendToGoogleSheets(data) {
     
     // Google Apps Script очікує дані у вигляді query parameters
     const params = new URLSearchParams(data).toString();
-    const url = `${GOOGLE_SCRIPT_URL}?${params}`;
+    const url = `${PROXY_URL}?${params}`;
 
     try {
         const response = await axios.get(url);
