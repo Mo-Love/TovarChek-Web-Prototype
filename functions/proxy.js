@@ -1,9 +1,11 @@
-{
-  "name": "netlify-functions-dependencies",
-  "version": "1.0.0",
-  "description": "Dependencies for Netlify functions",
-  "main": "proxy.js",
-  "dependencies": {
-    "axios": "^1.6.8"
-  }
-}
+// functions/proxy.js
+const axios = require('axios');
+
+// 🔴 ВСТАВТЕ СЮДИ ВАШ GOOGLE APPS SCRIPT URL!
+const GOOGLE_SCRIPT_URL = "ВАШ_УНІКАЛЬНИЙ_GOOGLE_APPS_SCRIPT_URL";
+
+exports.handler = async (event) => {
+    // ... (решта логіки)
+    const url = `${GOOGLE_SCRIPT_URL}?${queryString}`;
+    // ...
+};
