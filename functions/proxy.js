@@ -2,7 +2,7 @@
 const axios = require('axios');
 
 // 🔴 ВСТАВТЕ СЮДИ ВАШ GOOGLE APPS SCRIPT URL!
-const GOOGLE_SCRIPT_URL = "ВАШ_УНІКАЛЬНИЙ_GOOGLE_APPS_SCRIPT_URL";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby-S7fDyA4bM1qnu-JcNxf4FSER81Tr2dhq6zcGkomXdtSkr9dHHsm7bQZlyTspoLOE/exec";
 
 exports.handler = async (event) => {
     // Забезпечуємо, що це GET-запит
@@ -34,3 +34,5 @@ exports.handler = async (event) => {
         };
     }
 };
+
+
