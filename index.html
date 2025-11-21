@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ТоварЧек: Веб-Прототип</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #loading { color: orange; font-weight: bold; }
+        #status { margin-top: 15px; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🛒 ТоварЧек Веб-Прототип</h1>
+    <p>Тестування логіки Gemini та Google Sheets.</p>
+
+    <input type="text" id="userInput" placeholder="Введіть назву товару (для тесту)" value="банан">
+    <button onclick="processInput()">Обробити</button>
+    
+    <div id="loading" style="display: none;">Запит обробляється...</div>
+    
+    <h3>Результат:</h3>
+    <div id="status"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
