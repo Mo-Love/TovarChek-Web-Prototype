@@ -1,7 +1,8 @@
 # netlify.toml
+
 [build]
   command = "echo 'Deploying'"
-  publish = "public" # Не обов'язково, але стандартно
-
+  publish = "."  # Публікувати з кореневої папки
+  
 [functions]
-  directory = "functions" # Вказуємо, що функції будуть у папці 'functions'
+  directory = "functions"
