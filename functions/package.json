@@ -1,8 +1,0 @@
-{
-  "name": "netlify-functions-dependencies",
-  "version": "1.0.0",
-  "description": "Dependencies for Netlify functions",
-  "dependencies": {
-    "axios": "^1.6.8"
-  }
-}
