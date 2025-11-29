@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Склад Сканер</title>
+    <title>AI Склад Сканер (v2)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f2f2f7; /* Світло-сірий фон як на iOS */
+            background-color: #f2f2f7;
             margin: 0;
             padding: 20px;
             display: flex;
@@ -33,22 +33,26 @@
             border-radius: 8px;
             overflow: hidden;
             margin-bottom: 20px;
-            display: none; /* Приховано за замовчуванням */
+            display: none; 
+            background: black;
         }
 
         .btn {
             background-color: #007aff;
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             margin: 5px;
+            width: 100%;
+            max-width: 300px;
         }
+        .btn:active { opacity: 0.8; }
         .btn-stop { background-color: #ff3b30; }
-        .btn-clear { background-color: #8e8e93; margin-top: 20px; }
+        .btn-clear { background-color: #8e8e93; margin-top: 20px; font-size: 16px; }
 
         table {
             width: 100%;
@@ -74,7 +78,7 @@
 <body>
 
 <div class="container">
-    <h1>📦 Склад (AI Тест)</h1>
+    <h1>📦 Склад + Gemini</h1>
 
     <div id="reader"></div>
 
@@ -86,7 +90,7 @@
             <tr>
                 <th>Час</th>
                 <th>Штрих-код</th>
-                <th>Товар (Gemini)</th>
+                <th>Товар (AI)</th>
             </tr>
         </thead>
         <tbody id="resultBody">
@@ -97,10 +101,8 @@
 </div>
 
 <script>
-    // --- НАЛАШТУВАННЯ ---
-    // Встав сюди свій ключ. УВАГА: На GitHub Pages цей ключ буде видно всім.
-    // Для тесту це ок, для продакшену треба бекенд.
-    const GEMINI_API_KEY = AIzaSyB38IyHU_8SWYc9u2KQPGuC5I_YvOGIeOI; 
+    // --- ВАШ КЛЮЧ (Вставлений і виправлений) ---
+    const GEMINI_API_KEY = 'AIzaSyB38IyHU_8SWYc9u2KQPGuC5I_YvOGIeOI'; 
     
     let html5QrcodeScanner;
     const resultBody = document.getElementById('resultBody');
@@ -112,57 +114,87 @@
     async function startScanner() {
         if (isScanning) return;
         
+        // 1. Перевірка чи бібліотека завантажилась
+        if (typeof Html5Qrcode === 'undefined') {
+            alert("Помилка: Бібліотека сканера не завантажилась. Перевір інтернет з'єднання.");
+            return;
+        }
+
+        // Змінюємо інтерфейс
         document.getElementById('reader').style.display = 'block';
         document.getElementById('scanBtn').style.display = 'none';
         document.getElementById('stopBtn').style.display = 'inline-block';
 
-        html5QrcodeScanner = new Html5Qrcode("reader");
-        
-        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-        
         try {
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            // Конфігурація сканера
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            };
+            
+            // Запуск камери (environment = задня камера)
             await html5QrcodeScanner.start(
                 { facingMode: "environment" }, 
                 config, 
                 onScanSuccess
             );
+            
             isScanning = true;
+
         } catch (err) {
-            console.error("Помилка камери", err);
-            alert("Не вдалося запустити камеру");
+            console.error("Помилка камери:", err);
+            // ВИВОДИМО ПОМИЛКУ КОРИСТУВАЧУ
+            alert("Не вдалося запустити камеру! \nПомилка: " + err);
+            
+            // Повертаємо кнопки назад
+            stopScannerUI();
         }
     }
 
     function stopScanner() {
         if (html5QrcodeScanner && isScanning) {
             html5QrcodeScanner.stop().then(() => {
-                document.getElementById('reader').style.display = 'none';
-                document.getElementById('scanBtn').style.display = 'inline-block';
-                document.getElementById('stopBtn').style.display = 'none';
-                isScanning = false;
+                stopScannerUI();
+            }).catch(err => {
+                console.error("Failed to stop", err);
+                stopScannerUI();
             });
+        } else {
+            stopScannerUI();
         }
     }
 
+    function stopScannerUI() {
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('scanBtn').style.display = 'inline-block';
+        document.getElementById('stopBtn').style.display = 'none';
+        isScanning = false;
+    }
+
     function onScanSuccess(decodedText, decodedResult) {
-        // Зупиняємо сканер після успішного сканування (щоб не сканував 100 разів одну пачку)
+        // Зупиняємо камеру після успіху
         stopScanner();
         
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        // 1. Додаємо рядок у таблицю з "Loading..."
-        const rowId = Date.now(); // Унікальний ID для рядка
+        // Генеруємо ID для рядка
+        const rowId = Date.now(); 
+        
+        // Додаємо в таблицю
         addTableRow(time, decodedText, "🔍 Шукаю...", rowId);
         
-        // 2. Зберігаємо в LocalStorage (поки без опису)
+        // Зберігаємо (тимчасово без опису)
         saveToLocalStorage(time, decodedText, "Завантаження...");
 
-        // 3. Запитуємо Gemini
+        // Питаємо AI
         fetchProductDescription(decodedText, rowId);
     }
 
     async function fetchProductDescription(barcode, rowId) {
-        if (!GEMINI_API_KEY || GEMINI_API_KEY === 'ТУТ_ТВІЙ_КЛЮЧ_GEMINI') {
+        if (!GEMINI_API_KEY) {
             updateRowDescription(rowId, "⚠️ Немає API ключа");
             return;
         }
@@ -172,7 +204,7 @@
         const prompt = {
             contents: [{
                 parts: [{
-                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою. Якщо не знаєш точно, припусти базуючись на коді або напиши "Невідомий товар". Не використовуй форматування, тільки текст.`
+                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою. Якщо це відомий бренд, вкажи його. Якщо не знаєш точно, напиши "Невідомий товар". Не використовуй Markdown, тільки чистий текст.`
                 }]
             }]
         };
@@ -185,19 +217,23 @@
             });
 
             const data = await response.json();
-            const description = data.candidates[0].content.parts[0].text.trim();
             
-            // Оновлюємо таблицю
+            let description = "Не знайдено";
+            if (data.candidates && data.candidates[0].content) {
+                description = data.candidates[0].content.parts[0].text.trim();
+            }
+            
+            // Оновлюємо UI і Пам'ять
             updateRowDescription(rowId, description);
-            
-            // Оновлюємо LocalStorage
             updateLocalStorageDescription(barcode, description);
 
         } catch (error) {
             console.error("Gemini Error:", error);
-            updateRowDescription(rowId, "❌ Помилка AI");
+            updateRowDescription(rowId, "❌ Помилка мережі");
         }
     }
+
+    // --- Допоміжні функції ---
 
     function addTableRow(time, code, desc, id) {
         const row = document.createElement('tr');
@@ -207,27 +243,23 @@
             <td class="code-col">${code}</td>
             <td class="desc-col" id="desc-${id}">${desc}</td>
         `;
-        // Додаємо зверху
         resultBody.insertBefore(row, resultBody.firstChild);
     }
 
     function updateRowDescription(rowId, newText) {
         const cell = document.getElementById(`desc-${rowId}`);
-        if (cell) {
-            cell.textContent = newText;
-        }
+        if (cell) cell.textContent = newText;
     }
 
     function saveToLocalStorage(time, code, desc) {
         let history = JSON.parse(localStorage.getItem('scanHistory')) || [];
         history.unshift({ time, code, desc, id: Date.now() });
-        if (history.length > 50) history.pop(); // Зберігаємо останні 50
+        if (history.length > 50) history.pop(); 
         localStorage.setItem('scanHistory', JSON.stringify(history));
     }
 
     function updateLocalStorageDescription(code, newDesc) {
         let history = JSON.parse(localStorage.getItem('scanHistory')) || [];
-        // Знаходимо перший запис з таким кодом і оновлюємо
         for (let item of history) {
             if (item.code === code) {
                 item.desc = newDesc;
@@ -241,19 +273,23 @@
         let history = JSON.parse(localStorage.getItem('scanHistory')) || [];
         resultBody.innerHTML = '';
         history.forEach(item => {
+            // Для старих записів, де нема ID, генеруємо фейковий
+            const id = item.id || Math.random().toString(36).substr(2, 9);
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.time}</td>
                 <td class="code-col">${item.code}</td>
-                <td class="desc-col">${item.desc}</td>
+                <td class="desc-col" id="desc-${id}">${item.desc || ''}</td>
             `;
             resultBody.appendChild(row);
         });
     }
 
     function clearHistory() {
-        localStorage.removeItem('scanHistory');
-        resultBody.innerHTML = '';
+        if(confirm("Видалити всю історію?")) {
+            localStorage.removeItem('scanHistory');
+            resultBody.innerHTML = '';
+        }
     }
 </script>
 
