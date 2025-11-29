@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Склад: Zoom версія</title>
+    <title>AI Smart Scanner</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -38,11 +38,10 @@
             min-height: 250px;
         }
 
-        /* Стилі для повзунка зуму */
         .zoom-container {
             width: 100%;
             margin-bottom: 20px;
-            display: none; /* Покажемо коли камера запуститься */
+            display: none; 
         }
         
         input[type=range] {
@@ -91,12 +90,12 @@
 <body>
 
 <div class="container">
-    <h1>📦 Склад + Gemini</h1>
+    <h1>📦 Розумний Склад</h1>
 
     <div id="reader"></div>
 
     <div id="zoomContainer" class="zoom-container">
-        <label for="zoomSlider">🔍 Зум (відійди і наблизь):</label><br>
+        <label for="zoomSlider">🔍 Зум (налаштуй чіткість):</label><br>
         <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
     </div>
 
@@ -108,7 +107,7 @@
             <tr>
                 <th>Час</th>
                 <th>Штрих-код</th>
-                <th>Товар (AI)</th>
+                <th>Назва товару</th>
             </tr>
         </thead>
         <tbody id="resultBody"></tbody>
@@ -134,7 +133,6 @@
         document.getElementById('stopBtn').style.display = 'inline-block';
 
         try {
-            // Ініціалізуємо з пріоритетом сканування, а не відео
             html5QrcodeScanner = new Html5Qrcode("reader");
             
             const config = { 
@@ -143,7 +141,6 @@
                 aspectRatio: 1.0
             };
             
-            // Запускаємо камеру
             await html5QrcodeScanner.start(
                 { facingMode: "environment" }, 
                 config, 
@@ -151,8 +148,6 @@
             );
             
             isScanning = true;
-            
-            // --- НАЛАШТУВАННЯ ЗУМУ (Магія тут) ---
             checkZoomCapabilities();
 
         } catch (err) {
@@ -162,50 +157,10 @@
         }
     }
 
-    // Функція для активації зуму
-    function checkZoomCapabilities() {
-        const zoomSlider = document.getElementById('zoomSlider');
-        const zoomContainer = document.getElementById('zoomContainer');
-
-        // Отримуємо можливості запущеної камери
-        const track = html5QrcodeScanner.getRunningTrackCameraCapabilities(); // Ця функція не завжди працює в усіх браузерах, але спробуємо
-        
-        // Більш надійний спосіб через відео трек
-        try {
-             // Це хак, щоб добратися до відео-треку
-             const videoElement = document.querySelector("#reader video");
-             if (videoElement && videoElement.srcObject) {
-                const track = videoElement.srcObject.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
-
-                if (capabilities.zoom) {
-                    zoomContainer.style.display = 'block';
-                    zoomSlider.min = capabilities.zoom.min;
-                    zoomSlider.max = capabilities.zoom.max;
-                    zoomSlider.step = capabilities.zoom.step;
-                    zoomSlider.value = track.getSettings().zoom || 1;
-
-                    zoomSlider.oninput = function() {
-                        track.applyConstraints({
-                            advanced: [ { zoom: parseFloat(this.value) } ]
-                        });
-                    }
-                } else {
-                    console.log("Зум не підтримується цим пристроєм");
-                }
-             }
-        } catch (e) {
-            console.log("Не вдалося налаштувати зум:", e);
-        }
-    }
-
+    // Зупинка і інтерфейс
     function stopScanner() {
         if (html5QrcodeScanner && isScanning) {
-            html5QrcodeScanner.stop().then(() => {
-                stopScannerUI();
-            }).catch(err => {
-                stopScannerUI();
-            });
+            html5QrcodeScanner.stop().then(stopScannerUI).catch(stopScannerUI);
         } else {
             stopScannerUI();
         }
@@ -219,29 +174,88 @@
         isScanning = false;
     }
 
+    // Зум
+    function checkZoomCapabilities() {
+        try {
+             const videoElement = document.querySelector("#reader video");
+             if (videoElement && videoElement.srcObject) {
+                const track = videoElement.srcObject.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    const slider = document.getElementById('zoomSlider');
+                    document.getElementById('zoomContainer').style.display = 'block';
+                    slider.min = capabilities.zoom.min;
+                    slider.max = capabilities.zoom.max;
+                    slider.step = capabilities.zoom.step;
+                    slider.value = track.getSettings().zoom || 1;
+                    slider.oninput = function() {
+                        track.applyConstraints({ advanced: [ { zoom: parseFloat(this.value) } ] });
+                    }
+                }
+             }
+        } catch (e) { console.log(e); }
+    }
+
+    // --- ГОЛОВНА ЛОГІКА ПОШУКУ ---
     function onScanSuccess(decodedText, decodedResult) {
         stopScanner();
         
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         const rowId = Date.now(); 
         
-        addTableRow(time, decodedText, "🔍 Шукаю...", rowId);
+        addTableRow(time, decodedText, "🔍 Пошук в базах...", rowId);
         saveToLocalStorage(time, decodedText, "Завантаження...");
-        fetchProductDescription(decodedText, rowId);
+        
+        // Запускаємо ланцюжок пошуку
+        identifyProduct(decodedText, rowId);
     }
 
-    async function fetchProductDescription(barcode, rowId) {
+    async function identifyProduct(barcode, rowId) {
+        // КРОК 1: Шукаємо в OpenFoodFacts (База реальних товарів)
+        try {
+            const dbResponse = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const dbData = await dbResponse.json();
+
+            if (dbData.status === 1) {
+                // УРА! Товар знайдено в базі
+                let productName = dbData.product.product_name_uk || dbData.product.product_name || dbData.product.generic_name;
+                let brand = dbData.product.brands || "";
+                
+                // Формуємо гарну назву
+                let fullName = brand ? `${brand} ${productName}` : productName;
+                if (!fullName) fullName = "Товар знайдено (без назви)";
+
+                updateRowDescription(rowId, "✅ " + fullName);
+                updateLocalStorageDescription(barcode, fullName);
+                return; // Зупиняємось, Gemini не потрібен
+            }
+        } catch (error) {
+            console.log("Помилка бази даних, переходимо до AI...");
+        }
+
+        // КРОК 2: Якщо база не знає, питаємо Gemini (як остання надія)
+        askGemini(barcode, rowId);
+    }
+
+    async function askGemini(barcode, rowId) {
         if (!GEMINI_API_KEY) {
             updateRowDescription(rowId, "⚠️ Немає API ключа");
             return;
         }
+
+        // Оновлюємо статус
+        updateRowDescription(rowId, "🤖 Питаю ШІ...");
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
         
         const prompt = {
             contents: [{
                 parts: [{
-                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою. Якщо не знаєш, напиши категорію.`
+                    text: `Проаналізуй штрих-код ${barcode}. 
+                    1. Визнач країну виробника за кодом (перші 3 цифри).
+                    2. Якщо це відомий глобальний код, назви товар.
+                    3. Якщо точний товар невідомий, напиши ТІЛЬКИ країну і ймовірну категорію.
+                    Приклад відповіді: "Україна, можливо молочні продукти" або "Coca-Cola 0.5L".`
                 }]
             }]
         };
@@ -254,21 +268,22 @@
             });
 
             const data = await response.json();
+            let description = "Невідомий код";
             
-            let description = "Не знайдено";
             if (data.candidates && data.candidates[0].content) {
-                description = data.candidates[0].content.parts[0].text.trim();
+                description = "🤖 " + data.candidates[0].content.parts[0].text.trim();
             }
             
             updateRowDescription(rowId, description);
             updateLocalStorageDescription(barcode, description);
 
         } catch (error) {
-            console.error("Gemini Error:", error);
-            updateRowDescription(rowId, "❌ Помилка AI");
+            console.error(error);
+            updateRowDescription(rowId, "❌ Не знайдено");
         }
     }
 
+    // --- Допоміжні функції ---
     function addTableRow(time, code, desc, id) {
         const row = document.createElement('tr');
         row.dataset.id = id;
