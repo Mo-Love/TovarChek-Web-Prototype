@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Склад Сканер (v2)</title>
+    <title>AI Склад Сканер (Pro)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -35,6 +35,7 @@
             margin-bottom: 20px;
             display: none; 
             background: black;
+            min-height: 250px;
         }
 
         .btn {
@@ -93,34 +94,29 @@
                 <th>Товар (AI)</th>
             </tr>
         </thead>
-        <tbody id="resultBody">
-            </tbody>
+        <tbody id="resultBody"></tbody>
     </table>
 
     <button class="btn btn-clear" onclick="clearHistory()">🗑 Очистити історію</button>
 </div>
 
 <script>
-    // --- ВАШ КЛЮЧ (Вставлений і виправлений) ---
     const GEMINI_API_KEY = 'AIzaSyB38IyHU_8SWYc9u2KQPGuC5I_YvOGIeOI'; 
     
     let html5QrcodeScanner;
     const resultBody = document.getElementById('resultBody');
     let isScanning = false;
 
-    // Завантаження історії при старті
     window.onload = loadHistory;
 
     async function startScanner() {
         if (isScanning) return;
         
-        // 1. Перевірка чи бібліотека завантажилась
         if (typeof Html5Qrcode === 'undefined') {
-            alert("Помилка: Бібліотека сканера не завантажилась. Перевір інтернет з'єднання.");
+            alert("Помилка завантаження бібліотеки. Перевір інтернет.");
             return;
         }
 
-        // Змінюємо інтерфейс
         document.getElementById('reader').style.display = 'block';
         document.getElementById('scanBtn').style.display = 'none';
         document.getElementById('stopBtn').style.display = 'inline-block';
@@ -128,16 +124,27 @@
         try {
             html5QrcodeScanner = new Html5Qrcode("reader");
             
-            // Конфігурація сканера
+            // --- НАЛАШТУВАННЯ ДЛЯ КРАЩОГО ЗЧИТУВАННЯ ---
             const config = { 
-                fps: 10, 
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
+                fps: 15, // Більше кадрів в секунду
+                qrbox: { width: 300, height: 150 }, // Прямокутник (краще для штрих-кодів)
+                aspectRatio: 1.0,
+                // Експериментально: спроба покращити фокус
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                }
             };
             
-            // Запуск камери (environment = задня камера)
+            // Примусово просимо високу якість відео
+            const cameraConfig = { 
+                facingMode: "environment",
+                focusMode: "continuous", // Спроба увімкнути автофокус
+                width: { min: 640, ideal: 1280, max: 1920 }, // HD якість
+                height: { min: 480, ideal: 720, max: 1080 }
+            };
+            
             await html5QrcodeScanner.start(
-                { facingMode: "environment" }, 
+                cameraConfig, 
                 config, 
                 onScanSuccess
             );
@@ -145,11 +152,8 @@
             isScanning = true;
 
         } catch (err) {
-            console.error("Помилка камери:", err);
-            // ВИВОДИМО ПОМИЛКУ КОРИСТУВАЧУ
-            alert("Не вдалося запустити камеру! \nПомилка: " + err);
-            
-            // Повертаємо кнопки назад
+            console.error("Camera Error:", err);
+            alert("Помилка камери: " + err);
             stopScannerUI();
         }
     }
@@ -159,7 +163,7 @@
             html5QrcodeScanner.stop().then(() => {
                 stopScannerUI();
             }).catch(err => {
-                console.error("Failed to stop", err);
+                console.error("Stop failed", err);
                 stopScannerUI();
             });
         } else {
@@ -175,21 +179,13 @@
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-        // Зупиняємо камеру після успіху
         stopScanner();
         
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        // Генеруємо ID для рядка
         const rowId = Date.now(); 
         
-        // Додаємо в таблицю
         addTableRow(time, decodedText, "🔍 Шукаю...", rowId);
-        
-        // Зберігаємо (тимчасово без опису)
         saveToLocalStorage(time, decodedText, "Завантаження...");
-
-        // Питаємо AI
         fetchProductDescription(decodedText, rowId);
     }
 
@@ -204,7 +200,7 @@
         const prompt = {
             contents: [{
                 parts: [{
-                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою. Якщо це відомий бренд, вкажи його. Якщо не знаєш точно, напиши "Невідомий товар". Не використовуй Markdown, тільки чистий текст.`
+                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою (Бренд + Назва + Вага/Об'єм). Якщо це невідомий код, спробуй визначити категорію або країну виробника.`
                 }]
             }]
         };
@@ -223,17 +219,14 @@
                 description = data.candidates[0].content.parts[0].text.trim();
             }
             
-            // Оновлюємо UI і Пам'ять
             updateRowDescription(rowId, description);
             updateLocalStorageDescription(barcode, description);
 
         } catch (error) {
             console.error("Gemini Error:", error);
-            updateRowDescription(rowId, "❌ Помилка мережі");
+            updateRowDescription(rowId, "❌ Помилка AI");
         }
     }
-
-    // --- Допоміжні функції ---
 
     function addTableRow(time, code, desc, id) {
         const row = document.createElement('tr');
@@ -273,7 +266,6 @@
         let history = JSON.parse(localStorage.getItem('scanHistory')) || [];
         resultBody.innerHTML = '';
         history.forEach(item => {
-            // Для старих записів, де нема ID, генеруємо фейковий
             const id = item.id || Math.random().toString(36).substr(2, 9);
             const row = document.createElement('tr');
             row.innerHTML = `
