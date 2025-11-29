@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Склад Сканер (Fix)</title>
+    <title>AI Склад: Zoom версія</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -32,10 +32,22 @@
             width: 100%;
             border-radius: 8px;
             overflow: hidden;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             display: none; 
             background: black;
             min-height: 250px;
+        }
+
+        /* Стилі для повзунка зуму */
+        .zoom-container {
+            width: 100%;
+            margin-bottom: 20px;
+            display: none; /* Покажемо коли камера запуститься */
+        }
+        
+        input[type=range] {
+            width: 80%;
+            height: 25px;
         }
 
         .btn {
@@ -83,6 +95,11 @@
 
     <div id="reader"></div>
 
+    <div id="zoomContainer" class="zoom-container">
+        <label for="zoomSlider">🔍 Зум (відійди і наблизь):</label><br>
+        <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
+    </div>
+
     <button id="scanBtn" class="btn" onclick="startScanner()">📷 Сканувати</button>
     <button id="stopBtn" class="btn btn-stop" onclick="stopScanner()" style="display:none;">⏹ Зупинити</button>
 
@@ -112,33 +129,31 @@
     async function startScanner() {
         if (isScanning) return;
         
-        if (typeof Html5Qrcode === 'undefined') {
-            alert("Помилка завантаження бібліотеки. Перевір інтернет.");
-            return;
-        }
-
         document.getElementById('reader').style.display = 'block';
         document.getElementById('scanBtn').style.display = 'none';
         document.getElementById('stopBtn').style.display = 'inline-block';
 
         try {
+            // Ініціалізуємо з пріоритетом сканування, а не відео
             html5QrcodeScanner = new Html5Qrcode("reader");
             
-            // --- ВИПРАВЛЕНО: Тільки базові налаштування ---
             const config = { 
                 fps: 10, 
-                qrbox: { width: 250, height: 150 }, // Прямокутник для штрих-коду
+                qrbox: { width: 250, height: 150 }, 
                 aspectRatio: 1.0
             };
             
-            // --- ВИПРАВЛЕНО: Передаємо тільки один параметр для камери ---
+            // Запускаємо камеру
             await html5QrcodeScanner.start(
-                { facingMode: "environment" }, // Тільки цей один ключ!
+                { facingMode: "environment" }, 
                 config, 
                 onScanSuccess
             );
             
             isScanning = true;
+            
+            // --- НАЛАШТУВАННЯ ЗУМУ (Магія тут) ---
+            checkZoomCapabilities();
 
         } catch (err) {
             console.error("Camera Error:", err);
@@ -147,12 +162,48 @@
         }
     }
 
+    // Функція для активації зуму
+    function checkZoomCapabilities() {
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomContainer = document.getElementById('zoomContainer');
+
+        // Отримуємо можливості запущеної камери
+        const track = html5QrcodeScanner.getRunningTrackCameraCapabilities(); // Ця функція не завжди працює в усіх браузерах, але спробуємо
+        
+        // Більш надійний спосіб через відео трек
+        try {
+             // Це хак, щоб добратися до відео-треку
+             const videoElement = document.querySelector("#reader video");
+             if (videoElement && videoElement.srcObject) {
+                const track = videoElement.srcObject.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+
+                if (capabilities.zoom) {
+                    zoomContainer.style.display = 'block';
+                    zoomSlider.min = capabilities.zoom.min;
+                    zoomSlider.max = capabilities.zoom.max;
+                    zoomSlider.step = capabilities.zoom.step;
+                    zoomSlider.value = track.getSettings().zoom || 1;
+
+                    zoomSlider.oninput = function() {
+                        track.applyConstraints({
+                            advanced: [ { zoom: parseFloat(this.value) } ]
+                        });
+                    }
+                } else {
+                    console.log("Зум не підтримується цим пристроєм");
+                }
+             }
+        } catch (e) {
+            console.log("Не вдалося налаштувати зум:", e);
+        }
+    }
+
     function stopScanner() {
         if (html5QrcodeScanner && isScanning) {
             html5QrcodeScanner.stop().then(() => {
                 stopScannerUI();
             }).catch(err => {
-                console.error("Stop failed", err);
                 stopScannerUI();
             });
         } else {
@@ -164,6 +215,7 @@
         document.getElementById('reader').style.display = 'none';
         document.getElementById('scanBtn').style.display = 'inline-block';
         document.getElementById('stopBtn').style.display = 'none';
+        document.getElementById('zoomContainer').style.display = 'none';
         isScanning = false;
     }
 
@@ -189,7 +241,7 @@
         const prompt = {
             contents: [{
                 parts: [{
-                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою (Бренд + Назва + Вага). Якщо не знаєш точно, напиши категорію товару або "Невідомий товар".`
+                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою. Якщо не знаєш, напиши категорію.`
                 }]
             }]
         };
