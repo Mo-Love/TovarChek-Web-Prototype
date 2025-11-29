@@ -3,28 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ТоварЧек: Веб-Прототип</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <title>Мій Склад (Local)</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        #loading { color: orange; font-weight: bold; }
-        #status { margin-top: 15px; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap; }
-        .success { color: green; }
-        .error { color: red; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 15px;
+            background-color: #f0f2f5;
+            text-align: center;
+        }
+        h2 { margin-bottom: 10px; color: #333; }
+        
+        /* Стилі для камери */
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        /* Кнопки */
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            margin: 10px 5px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .btn-scan { background-color: #007bff; color: white; }
+        .btn-stop { background-color: #dc3545; color: white; display: none; }
+        .btn-clear { background-color: #6c757d; color: white; margin-top: 20px;}
+
+        /* Таблиця */
+        .table-container {
+            margin-top: 20px;
+            overflow-x: auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th { background-color: #f8f9fa; color: #555; }
+        tr:last-child td { border-bottom: none; }
+        
+        /* Анімація появи нового рядка */
+        .new-row {
+            animation: highlight 1.5s ease-out;
+        }
+        @keyframes highlight {
+            0% { background-color: #d4edda; }
+            100% { background-color: white; }
+        }
     </style>
 </head>
 <body>
-    <h1>🛒 ТоварЧек Веб-Прототип</h1>
-    <p>Тестування логіки Gemini та Google Sheets.</p>
 
-    <input type="text" id="userInput" placeholder="Введіть назву товару (для тесту)" value="банан">
-    <button onclick="processInput()">Обробити</button>
-    
-    <div id="loading" style="display: none;">Запит обробляється...</div>
-    
-    <h3>Результат:</h3>
-    <div id="status"></div>
+    <h2>📦 Склад (Тест)</h2>
 
-    <script src="app.js"></script>
+    <div id="reader"></div>
+
+    <button id="startBtn" class="btn-scan" onclick="startScanning()">📷 Сканувати</button>
+    <button id="stopBtn" class="btn-stop" onclick="stopScanning()">⏹ Стоп</button>
+
+    <div class="table-container">
+        <table id="inventoryTable">
+            <thead>
+                <tr>
+                    <th>Час</th>
+                    <th>Штрих-код</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <button class="btn-clear" onclick="clearHistory()">🗑 Очистити історію</button>
+
+    <script>
+        const html5QrCode = new Html5Qrcode("reader");
+        let isScanning = false;
+
+        // 1. Завантаження збережених даних при старті
+        window.onload = function() {
+            renderTable();
+        };
+
+        // 2. Функція запуску камери
+        function startScanning() {
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            // Намагаємось запустити задню камеру
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+            .catch(err => {
+                alert("Помилка камери: " + err);
+                stopScanning();
+            });
+        }
+
+        // 3. Функція зупинки
+        function stopScanning() {
+            html5QrCode.stop().then(() => {
+                document.getElementById('startBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').style.display = 'none';
+                console.log("Камера зупинена");
+            }).catch(err => console.log(err));
+        }
+
+        // 4. Що робити, коли знайшли код
+        function onScanSuccess(decodedText, decodedResult) {
+            // Зупиняємо камеру, щоб не сканувати той самий код 10 разів за секунду
+            stopScanning();
+            
+            // Звук "пік" (вібрація)
+            if (navigator.vibrate) navigator.vibrate(200);
+            
+            saveData(decodedText);
+            alert("✅ Знайдено: " + decodedText);
+        }
+
+        // 5. Збереження в пам'ять телефону (LocalStorage)
+        function saveData(code) {
+            let data = JSON.parse(localStorage.getItem('myInventory')) || [];
+            
+            const newItem = {
+                code: code,
+                time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute:'2-digit'})
+            };
+
+            // Додаємо на початок списку
+            data.unshift(newItem);
+            
+            localStorage.setItem('myInventory', JSON.stringify(data));
+            renderTable();
+        }
+
+        // 6. Малювання таблиці
+        function renderTable() {
+            const data = JSON.parse(localStorage.getItem('myInventory')) || [];
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            data.forEach((item, index) => {
+                let row = document.createElement('tr');
+                if(index === 0) row.classList.add('new-row'); // Підсвітити останній
+                row.innerHTML = `<td>${item.time}</td><td><b>${item.code}</b></td>`;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 7. Очищення
+        function clearHistory() {
+            if(confirm('Видалити всю історію сканувань?')) {
+                localStorage.removeItem('myInventory');
+                renderTable();
+            }
+        }
+    </script>
+
 </body>
 </html>
