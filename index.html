@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Склад Сканер (Pro)</title>
+    <title>AI Склад Сканер (Fix)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body {
@@ -124,27 +124,16 @@
         try {
             html5QrcodeScanner = new Html5Qrcode("reader");
             
-            // --- НАЛАШТУВАННЯ ДЛЯ КРАЩОГО ЗЧИТУВАННЯ ---
+            // --- ВИПРАВЛЕНО: Тільки базові налаштування ---
             const config = { 
-                fps: 15, // Більше кадрів в секунду
-                qrbox: { width: 300, height: 150 }, // Прямокутник (краще для штрих-кодів)
-                aspectRatio: 1.0,
-                // Експериментально: спроба покращити фокус
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                }
+                fps: 10, 
+                qrbox: { width: 250, height: 150 }, // Прямокутник для штрих-коду
+                aspectRatio: 1.0
             };
             
-            // Примусово просимо високу якість відео
-            const cameraConfig = { 
-                facingMode: "environment",
-                focusMode: "continuous", // Спроба увімкнути автофокус
-                width: { min: 640, ideal: 1280, max: 1920 }, // HD якість
-                height: { min: 480, ideal: 720, max: 1080 }
-            };
-            
+            // --- ВИПРАВЛЕНО: Передаємо тільки один параметр для камери ---
             await html5QrcodeScanner.start(
-                cameraConfig, 
+                { facingMode: "environment" }, // Тільки цей один ключ!
                 config, 
                 onScanSuccess
             );
@@ -200,7 +189,7 @@
         const prompt = {
             contents: [{
                 parts: [{
-                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою (Бренд + Назва + Вага/Об'єм). Якщо це невідомий код, спробуй визначити категорію або країну виробника.`
+                    text: `Який товар має штрих-код ${barcode}? Напиши тільки коротку назву товару українською мовою (Бренд + Назва + Вага). Якщо не знаєш точно, напиши категорію товару або "Невідомий товар".`
                 }]
             }]
         };
